@@ -1,0 +1,6 @@
+{
+  "name": "2048 3D Deluxe",
+  "description": "Erlebe das Kultspiel 2048 in beeindruckender 3D-Grafik mit anpassbaren Spielfeldgrößen, Cheat-Modus, Audio-Synthese und taktilen Animationen.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

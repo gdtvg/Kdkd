@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidLeaderboardEntry(data) {
+      return data.keys().hasAll(['userId', 'displayName', 'score', 'highestTile', 'gridSize']) &&
+             data.keys().hasOnly(['id', 'userId', 'displayName', 'photoURL', 'score', 'highestTile', 'moves', 'gridSize', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 64 &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 512)) &&
+             data.score is number && data.score >= 0 && data.score <= 100000000 &&
+             data.highestTile is number && data.highestTile >= 2 && data.highestTile <= 1048576 &&
+             (!('moves' in data) || (data.moves is number && data.moves >= 0)) &&
+             data.gridSize is number && (data.gridSize == 3 || data.gridSize == 4 || data.gridSize == 5 || data.gridSize == 6) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64));
+    }
+
+    function isValidChatMessage(data) {
+      return data.keys().hasAll(['userId', 'displayName', 'text', 'channel']) &&
+             data.keys().hasOnly(['id', 'userId', 'displayName', 'photoURL', 'text', 'channel', 'createdAt', 'isAdmin']) &&
+             data.userId == request.auth.uid &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 64 &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 512)) &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 1000 &&
+             data.channel is string && data.channel.size() >= 1 && data.channel.size() <= 32 &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64)) &&
+             (!('isAdmin' in data) || (data.isAdmin is bool));
+    }
+
+    match /leaderboard/{entryId} {
+      allow get: if isValidId(entryId);
+      allow list: if true;
+
+      allow create: if isSignedIn() &&
+                       isValidId(entryId) &&
+                       isValidLeaderboardEntry(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(entryId) &&
+                       existing().userId == request.auth.uid &&
+                       incoming().userId == request.auth.uid &&
+                       isValidLeaderboardEntry(incoming()) &&
+                       incoming().score >= existing().score;
+
+      allow delete: if isSignedIn() &&
+                       isValidId(entryId) &&
+                       existing().userId == request.auth.uid;
+    }
+
+    match /chat_messages/{messageId} {
+      allow get: if isValidId(messageId);
+      allow list: if true;
+
+      allow create: if isSignedIn() &&
+                       isValidId(messageId) &&
+                       isValidChatMessage(incoming());
+
+      allow delete: if isSignedIn() &&
+                       isValidId(messageId) &&
+                       existing().userId == request.auth.uid;
+    }
+
+    match /meme_rooms/{roomId} {
+      allow get, list: if isValidId(roomId);
+
+      allow create: if isSignedIn() &&
+                       isValidId(roomId) &&
+                       incoming().id == roomId &&
+                       incoming().hostId == request.auth.uid;
+
+      allow update: if isSignedIn() &&
+                       isValidId(roomId);
+
+      allow delete: if isSignedIn() &&
+                       isValidId(roomId) &&
+                       existing().hostId == request.auth.uid;
+    }
+  }
+}
